@@ -1,0 +1,39 @@
+chains: {
+  "ethereum": {
+    "pairs": "WETH-USDC,USDC-WETH,WETH-USDT,USDT-WETH,USDT-USDC,USDC-USDT,WETH-DAI,ETH-USDC,WBTC-WETH,USDC-HEX",
+    "id": "1",
+    "tokens": [
+      { "name": "WETH", "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", "decimals": 18},
+      { "name": "ETH", "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "decimals": 18},
+      { "name": "USDC", "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "decimals": 6},
+      { "name": "USDT", "address": "0xdac17f958d2ee523a2206206994597c13d831ec7", "decimals": 6},
+      { "name": "DAI", "address": "0x6b175474e89094c44da98b954eedeac495271d0f", "decimals": 18},
+      { "name": "WBTC", "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", "decimals": 8},
+      { "name": "HEX", "address": "0x2b591e99afe9f32eaa6214f7b7629768c40eeb39", "decimals": 8}
+    ]
+  },
+  "polygon": {
+    "pairs": "USDC-USDT,USDC-WETH,WMATIC-WETH,USDT-WETH,MATIC-WETH,WMATIC-USDC,USDC-WMATIC,WETH-USDC,USDT-MATIC,WETH-MATIC",
+    "id": "137",
+    tokens: [
+      { "name": "WETH", "address": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619", "decimals": 18},
+      { "name": "USDC", "address": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174", "decimals": 6},
+      { "name": "USDT", "address": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", "decimals": 6},
+      { "name": "WMATIC", "address": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270", "decimals": 18},
+      { "name": "MATIC", "address": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "decimals": 18}
+    ]
+  },
+  "avalanche": {
+    "pairs": "WAVAX-USDC,USDC-WAVAX,USDC.e-WAVAX,USDT-WAVAX,WAVAX-USDT,QI-WAVAX,WAVAX-QI,USDC.e-USDC,USDC-USDC.e",
+    "id": "43114",
+    tokens: [
+      { "name": "USDC", "address": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e", "decimals": 6},
+      { "name": "USDT", "address": "0x9702230a8ea53601f5cd2dc00fdbc13d4df4a8c7", "decimals": 6},
+      { "name": "WAVAX", "address": "0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7", "decimals": 18},
+      { "name": "USDC.e", "address": "0xa7d7079b0fead91f3e65f86e8915cb59c1a4c664", "decimals": 6},
+      { "name": "QI", "address": "0x8729438EB15e2C8B576fCc6AeCdA6A148776C0F5", "decimals": 18}
+    ]
+  }
+}
+
+cases: [10, 100, 1000, 10000, 100000]
