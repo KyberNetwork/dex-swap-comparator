@@ -4,7 +4,7 @@ public class Constants {
     static class BigQuery {
         public static final String PROJECT_ID = "develop-339203";
         public static final String DATASET = "data_warehouse";
-        public static final String TABLE_NAME = "dex_swap_info";
+        public static final String TABLE_NAME = "dex_swap_info_2";
     }
 
     static class Table_Column {
