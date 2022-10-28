@@ -4,10 +4,20 @@
         <Console name="console" target="SYSTEM_OUT">
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %L - %msg%n"/>
         </Console>
+
+        <RollingFile name="rolling_file"
+                     fileName="logs/dex-compare.log"
+                     filePattern="logs/logfile-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %L - %msg%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="20 MB"/>
+            </Policies>
+        </RollingFile>
     </Appenders>
     <Loggers>
         <Root level="DEBUG">
             <AppenderRef ref="console"/>
+<!--            <AppenderRef ref="rolling_file"/>-->
         </Root>
     </Loggers>
 </Configuration>

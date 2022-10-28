@@ -19,5 +19,6 @@ public class Constants {
         public static final String RANK = "rank";
         public static final String COMPARE = "compare_to_kyber";
         public static final String CREATED_AT = "created_at";
+        public static final String STATUS = "status";
     }
 }

@@ -28,7 +28,7 @@ public class Utils {
     }
 
     public static double compareRate(double x, double y) {
-        return (x * 100 / y) - 100;
+        return (x / y) - 1;
     }
 
     public static String getChainById(String chainId) {
@@ -45,7 +45,9 @@ public class Utils {
         sortedSwaps.get(0).setRank(rank);
         DexSwapInfo _2nd = sortedSwaps.get(1);
         double tmp = _2nd.getAmountOut();
-        rank++;
+        if (tmp < sortedSwaps.get(0).getAmountOut()) {
+            rank++;
+        }
         _2nd.setRank(rank);
         for (int i = 2; i < sortedSwaps.size(); i++) {
             DexSwapInfo dsi = sortedSwaps.get(i);

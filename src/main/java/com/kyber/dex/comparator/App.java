@@ -1,7 +1,9 @@
 package com.kyber.dex.comparator;
 
-import com.google.cloud.Timestamp;
-import okhttp3.*;
+import okhttp3.ConnectionPool;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
@@ -10,6 +12,7 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.Constructor;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,7 +32,7 @@ public class App {
     }
 
     private static final Logger log = LoggerFactory.getLogger(App.class);
-    private static final Date currentTimestamp = new Date();
+    private static Date currentTimestamp = new Date();
 
     private final static String _1INCH_API = "https://api.1inch.io/v4.0/";
     private final static String PARASWAPS_API = "https://apiv5.paraswap.io";
@@ -47,8 +50,8 @@ public class App {
 
     private static final BigQueryService bigQueryService = new BigQueryService();
     private final static OkHttpClient client = new OkHttpClient.Builder()
-            .readTimeout(30, TimeUnit.SECONDS)
-            .connectionPool(new ConnectionPool(5, 30, TimeUnit.SECONDS))
+            .readTimeout(10, TimeUnit.SECONDS)
+            .connectionPool(new ConnectionPool(8, 20, TimeUnit.SECONDS))
             .build();
 
     private static Token addPriceToToken(List<Integer> cases, Token t, Response response) {
@@ -64,6 +67,7 @@ public class App {
             } catch (IOException e) {
                 log.error(e.getMessage(), e);
             }
+            response.body().close();
         }
         return t;
     }
@@ -75,18 +79,23 @@ public class App {
         maps.put(from.getName(), from);
     }
 
-    public static void main(String[] args) throws IOException {
-
+    private static void runPriceCompair() throws FileNotFoundException {
         Map<String, Token> tokenPriceMap = new ConcurrentHashMap<>();
-        Path configPath = Paths.get(App.class.getClassLoader().getResource("config.yml").getPath());
+        currentTimestamp = new Date();
+        String configFromENV = System.getenv().getOrDefault("chains", "~/config.yml");
+        String pathToConfigFile = configFromENV.isEmpty() ? App.class.getClassLoader().getResource("config.yml").getPath() : configFromENV;
+//        log.info("Path to param config: {}", configFromENV);
+//        log.info("Path to config: {}", pathToConfigFile);
+        Path configPath = Paths.get(pathToConfigFile);
         Yaml yaml = new Yaml(new Constructor(Config.class));
         Config cfg = yaml.load(new FileInputStream(configPath.toFile()));
 
         Map<String, Map<String, Object>> chains = cfg.getChains();
         List<Integer> cases = cfg.getCases();
 
-        List<DexSwapInfo> swaps = new ArrayList<>();
+
         chains.forEach((k, v) -> {
+            List<DexSwapInfo> swaps = new ArrayList<>();
             List<Map<String, Object>> tokens = (List<Map<String, Object>>) v.get("tokens");
             tokens.forEach(t -> {
                 Token token = new Token();
@@ -124,13 +133,12 @@ public class App {
 
             String[] pairs = ((String) v.get("pairs")).split(",");
             for (String pair : pairs) {
-                log.info("Chain: {}\tPairs: {}", k, pair);
                 String[] p = pair.split("-");
                 Token srcToken = tokenPriceMap.get(p[0]);
                 Token destToken = tokenPriceMap.get(p[1]);
 
                 srcToken.getAmounts().forEach(i -> {
-                    log.info("Amount: {}", i);
+                    log.info("Chain: {}\tPairs: {}\tAmount: {}", k, pair, i);
                     List<DexSwapInfo> tmp = new ArrayList<>();
                     Map<String, Object> requestVariable = Map.of(
                             "chain", k,
@@ -148,10 +156,32 @@ public class App {
                         return 0;
                     });
                     swaps.addAll(rankingByAmount(tmp));
+//                    swaps.addAll(tmp);
                 });
             }
+            log.info("data to be inserted: {}", swaps.size());
             bigQueryService.insertRows(swaps);
         });
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        bigQueryService.createTable();
+//        run();
+        while (true) {
+            Runnable runnable = () -> {
+                try {
+                    runPriceCompair();
+                    log.info("Round done!");
+                } catch (FileNotFoundException e) {
+                    log.error(e.getMessage(), e);
+                }
+
+            };
+            Thread t = new Thread(runnable);
+            t.start();
+
+            Thread.sleep(1000 * 60 * 5);
+        }
     }
 
 
@@ -175,23 +205,34 @@ public class App {
                     swapInfo.setAmountIn(toAmountWithoutDecimal(js.getString("srcAmount"), fromToken.getDecimals()));
                     swapInfo.setAmountOut(toAmountWithoutDecimal(js.getString("destAmount"), toToken.getDecimals()));
                     swapInfo.setCompareToKyber(compareRate(swapInfo.getAmountOut(), swaps.get(0).getAmountOut()));
-                    swapInfo.setCreatedAt(currentTimestamp);
-                    swaps.add(swapInfo);
+                    swapInfo.setStatus(true);
                 } else {
-                    log.info("Call api not success with response: \n{}", response.body().string());
+                    swapInfo.setAmountIn(0d);
+                    swapInfo.setAmountOut(0d);
+                    swapInfo.setCompareToKyber(0d);
+                    swapInfo.setStatus(false);
+                    log.info("Call api \t{}\nnot success with response: \n{}", response.request().url().url(), response.body().string());
                 }
             } catch (IOException e) {
+                swapInfo.setAmountIn(0d);
+                swapInfo.setAmountOut(0d);
+                swapInfo.setCompareToKyber(0d);
+                swapInfo.setStatus(false);
                 log.error(e.getMessage(), e);
             }
+
+            swaps.add(swapInfo);
+            response.body().close();
             return null;
         };
 
         double amountDecimals = amount * Math.pow(10, fromToken.getDecimals().doubleValue());
         swapInfo.setSwapValue(amount * fromToken.getPrice());
+        swapInfo.setCreatedAt(currentTimestamp);
         Request req = makeBaseRequest(PARASWAPS_API +
                 "/prices?amount=" + amountWithDecimal(amountDecimals, fromToken.getDecimals()) + "&side=SELL&srcToken=" + fromToken.getAddress() + "&srcDecimals=" + fromToken.getDecimals() +
                 "&destToken=" + toToken.getAddress() + "&destDecimals=" + toToken.getDecimals() + "&network=" + chainId);
-        log.info("Req: {}", req.url());
+//        log.info("Req: {}", req.url());
         try {
             doCallHttp(client, req, func);
         } catch (IOException e) {
@@ -217,23 +258,33 @@ public class App {
                     JSONObject js = new JSONObject(jsonData);
                     swapInfo.setAmountIn(toAmountWithoutDecimal(js.getString("sellAmount"), srcToken.getDecimals()));
                     swapInfo.setAmountOut(toAmountWithoutDecimal(js.getString("buyAmount"), destToken.getDecimals()));
-                    swapInfo.setCreatedAt(currentTimestamp);
                     swapInfo.setCompareToKyber(compareRate(swapInfo.getAmountOut(), swaps.get(0).getAmountOut()));
-                    swaps.add(swapInfo);
+                    swapInfo.setStatus(true);
                 } else {
-                    log.info("Call api not success with response: \n{}", response.body().string());
+                    swapInfo.setAmountIn(0d);
+                    swapInfo.setAmountOut(0d);
+                    swapInfo.setCompareToKyber(0d);
+                    swapInfo.setStatus(false);
+                    log.info("Call api \t{}\nnot success with response: \n{}", response.request().url().url(), response.body().string());
                 }
             } catch (IOException e) {
+                swapInfo.setAmountIn(0d);
+                swapInfo.setAmountOut(0d);
+                swapInfo.setCompareToKyber(0d);
+                swapInfo.setStatus(false);
                 log.error(e.getMessage(), e);
             }
+            swaps.add(swapInfo);
+            response.body().close();
             return null;
         };
 
         double amountDecimals = amount * Math.pow(10, srcToken.getDecimals().doubleValue());
         swapInfo.setSwapValue(amount * srcToken.getPrice());
+        swapInfo.setCreatedAt(currentTimestamp);
         Request req = makeBaseRequest(_0X_API.get(chainId) +
                 "/price?sellToken=" + srcToken.getAddress() + "&buyToken=" + destToken.getAddress() + "&sellAmount=" + amountWithDecimal(amountDecimals, srcToken.getDecimals()));
-        log.info("Req: {}", req.url());
+//        log.info("Req: {}", req.url());
         try {
             doCallHttp(client, req, func);
         } catch (IOException e) {
@@ -259,24 +310,35 @@ public class App {
                     JSONObject js = new JSONObject(jsonData);
                     swapInfo.setAmountIn(toAmountWithoutDecimal(js.getString("fromTokenAmount"), srcToken.getDecimals()));
                     swapInfo.setAmountOut(toAmountWithoutDecimal(js.getString("toTokenAmount"), destToken.getDecimals()));
-                    swapInfo.setCreatedAt(currentTimestamp);
                     swapInfo.setCompareToKyber(compareRate(swapInfo.getAmountOut(), swaps.get(0).getAmountOut()));
-                    swaps.add(swapInfo);
+                    swapInfo.setStatus(true);
                 } else {
-                    log.info("Call api not success with response: \n{}", response.body().string());
+                    swapInfo.setAmountIn(0d);
+                    swapInfo.setAmountOut(0d);
+                    swapInfo.setCompareToKyber(0d);
+                    swapInfo.setStatus(false);
+                    log.info("Call api \t{}\nnot success with response: \n{}", response.request().url().url(), response.body().string());
                 }
             } catch (IOException e) {
+                swapInfo.setAmountIn(0d);
+                swapInfo.setAmountOut(0d);
+                swapInfo.setCompareToKyber(0d);
+                swapInfo.setStatus(false);
                 log.error(e.getMessage(), e);
             }
+
+            swaps.add(swapInfo);
+            response.body().close();
             return null;
         };
 
 
         double amountDecimals = amount * Math.pow(10, srcToken.getDecimals().doubleValue());
         swapInfo.setSwapValue(amount * srcToken.getPrice());
+        swapInfo.setCreatedAt(currentTimestamp);
         Request req = makeBaseRequest(_1INCH_API + chainId +
                 "/quote?fromTokenAddress=" + srcToken.getAddress() + "&toTokenAddress=" + destToken.getAddress() + "&amount=" + amountWithDecimal(amountDecimals, srcToken.getDecimals()));
-        log.info("Req: {}", req.url());
+//        log.info("Req: {}", req.url());
         try {
             doCallHttp(client, req, func);
         } catch (IOException e) {
@@ -297,19 +359,26 @@ public class App {
 
         Function<Response, Void> func = response -> {
             try {
+                //{"code":40020,"message":"could not find route","errorEntities":[],"details":[{"requestId":"6609788e-31c5-4da5-bdba-88ed8dc6364f"}]}
                 if (response.isSuccessful()) {
                     String jsonData = response.body().string();
                     JSONObject js = new JSONObject(jsonData);
                     swapInfo.setAmountIn(toAmountWithoutDecimal(js.getString("inputAmount"), srcToken.getDecimals()));
                     swapInfo.setAmountOut(toAmountWithoutDecimal(js.getString("outputAmount"), destToken.getDecimals()));
-                    swapInfo.setCreatedAt(currentTimestamp);
-                    swaps.add(swapInfo);
+                    swapInfo.setStatus(true);
                 } else {
-                    log.info("Call api not success with response: \n{}", response.body().string());
+                    swapInfo.setAmountIn(0d);
+                    swapInfo.setAmountOut(0d);
+                    swapInfo.setStatus(false);
+
+                    log.info("Call api \t{}\nnot success with response: \n{}", response.request().url().url(), response);
                 }
+
             } catch (IOException e) {
                 log.error(e.getMessage(), e);
             }
+            swaps.add(swapInfo);
+            response.body().close();
             return null;
         };
 
@@ -317,10 +386,12 @@ public class App {
         double amountDecimals = amount * Math.pow(10, srcToken.getDecimals().doubleValue());
         swapInfo.setSwapValue(amount * srcToken.getPrice());
         swapInfo.setCompareToKyber(0d);
+        swapInfo.setCreatedAt(currentTimestamp);
         Request req = makeBaseRequest(KYBER_API + getChainById(chainId) +
-                "/route/encode/?tokenIn=" + srcToken.getAddress() + "&tokenOut=" + destToken.getAddress() + "&amountIn=" + amountWithDecimal(amountDecimals, srcToken.getDecimals()) + "&to=0xdac17f958d2ee523a2206206994597c13d831ec7");
+                "/route/encode/?tokenIn=" + srcToken.getAddress() + "&tokenOut=" + destToken.getAddress() + "&amountIn=" + amountWithDecimal(amountDecimals, srcToken.getDecimals())
+                + "&to=0xdac17f958d2ee523a2206206994597c13d831ec7&gasInclude=true");
         try {
-            log.info("Req: {}", req.url());
+//            log.info("Req: {}", req.url());
             doCallHttp(client, req, func);
         } catch (IOException e) {
             log.error(e.getMessage(), e);

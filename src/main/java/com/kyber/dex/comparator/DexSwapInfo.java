@@ -14,9 +14,9 @@ public class DexSwapInfo {
     private double amountOut;
     private Double swapValue;
     private Date createdAt;
-
     private int rank;
     private Double compareToKyber;
+    private Boolean status;
 
     public DexSwapInfo() {
     }
@@ -109,9 +109,17 @@ public class DexSwapInfo {
         this.compareToKyber = compareToKyber;
     }
 
+    public Boolean getStatus() {
+        return status;
+    }
+
+    public void setStatus(Boolean status) {
+        this.status = status;
+    }
+
     @Override
     public String toString() {
-        return "DexSwapInfo{" +
+        return "{" +
                 "id='" + id + '\'' +
                 ", chainName='" + chainName + '\'' +
                 ", provider='" + provider + '\'' +
@@ -122,6 +130,7 @@ public class DexSwapInfo {
                 ", swapValue=" + swapValue +
                 ", createdAt=" + createdAt +
                 ", rank=" + rank +
+                ", status=" + status +
                 ", compareToKyber=" + compareToKyber +
                 '}';
     }

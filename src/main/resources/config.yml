@@ -24,7 +24,7 @@ chains: {
     ]
   },
   "avalanche": {
-    "pairs": "WAVAX-USDC,USDC-WAVAX,USDC.e-WAVAX,USDT-WAVAX,WAVAX-USDT,QI-WAVAX,WAVAX-QI,USDC.e-USDC,USDC-USDC.e",
+    "pairs": "WAVAX-USDC,USDC-WAVAX,USDC.e-WAVAX,WAVAX-USDC.e,USDT-WAVAX,WAVAX-USDT,QI-WAVAX,WAVAX-QI,USDC.e-USDC,USDC-USDC.e",
     "id": "43114",
     tokens: [
       { "name": "USDC", "address": "0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e", "decimals": 6},
@@ -35,5 +35,5 @@ chains: {
     ]
   }
 }
-
+#cases: [10]
 cases: [10, 100, 1000, 10000, 100000]
